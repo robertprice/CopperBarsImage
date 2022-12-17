@@ -1,6 +1,7 @@
 ;------------------------------
 ; Copper bars that show and fade in time to a soundtracker mod.
-; Robert Price - 27/11/2022
+; Logo colour cycles over the copper bars
+; Robert Price - 17/12/2022
 ;
 ;---------- Includes ----------
             INCDIR      "include"
@@ -13,6 +14,10 @@
 ;---------- Const ----------
 
 CIAA        EQU $bfe001
+
+			SECTION logo,DATA_C
+
+screen:		INCBIN	"amiga2.raw"			; 320x256 single bit plane image
 
             SECTION music,DATA_C
 
@@ -52,6 +57,12 @@ init:
 
 			; SET & BLTPRI & DMAEN & BPLEN & COPEN & BLTEN & SPREN bits
             move.w      #%1000011111100000,DMACON(a6)
+
+; setup bitplane1 in the copper list to point to our 1 bitplane image.
+			move.l	#screen,d0
+			move.w	d0,copBp1P+6						; set the low word
+			swap	d0
+			move.w	d0,copBp1P+2						; set the high word
 
 ; install our copper list
             move.l      #myCopperList,COP1LC(a6)
@@ -122,6 +133,9 @@ mainloop:
             bsr 		FadeBar
 
 .skip:
+
+; colour cycle the logo.
+			bsr			ColourCycleLogo
 
 ; check if the left mouse button has been pressed
 ; if it hasn't, loop back.
@@ -202,6 +216,74 @@ DrawBar:
             dbra		d1,.copperloop2
             rts
 
+;------------------------
+; Colour cycle the logo
+ColourCycleLogo:
+            movem.l 	d0-d3,-(sp)			; save the registers we need to use 
+
+			move.b		(LogoR),d0			; load the current red value in d0
+			move.b		(LogoG),d1			; load the current green value in d1
+			move.b		(LogoB),d2			; load the current blue value in d2
+
+			cmp.b		#0,d0
+			beq			.redzero
+.checkgreen:
+			cmp.b		#0,d1
+			beq			.greenzero
+.checkblue:
+			cmp.b		#0,d2
+			beq			.bluezero
+			bra			.setcolour
+
+.bluezero:
+			cmp.b		#0,d0
+			bgt			.rminusgplus
+			bra			.setcolour
+
+.greenzero
+			cmp.b		#0,d2
+			bgt			.bminusrplus
+			bra			.checkblue
+
+.redzero:
+			cmp.b		#0,d1
+			bgt			.gminusbplus
+			bra			.checkgreen
+
+.gminusbplus:
+			subq.b		#1,d1				; fade green
+			addq.b		#1,d2				; brighten blue
+			bra			.setcolour			; set the colour
+
+.bminusrplus:
+			subq.b		#1,d2				; fade blue
+			addq.b		#1,d0				; brighten red
+			bra			.setcolour			; set the colour
+
+.rminusgplus:
+			subq.b		#1,d0				; fade red
+			addq.b		#1,d1				; brighten green
+			bra			.setcolour			; set the colour
+
+; calculate the RGB value in d3
+.setcolour:
+			moveq.l		#0,d3				; clear d3
+			add.b		d0,d3				; add the red
+			lsl.w		#4,d3				; move left 4 bits
+			add.b		d1,d3				; add the green
+			lsl.w		#4,d3				; move left 4 bits
+			add.b		d2,d3				; add the blue
+
+			move.b		d0,(LogoR)			; save the red value
+			move.b		d1,(LogoG)			; save the green value
+			move.b		d2,(LogoB)			; save the blue value
+			move.w		d3,(LogoColour)		; save the RGB value
+
+			move.w		d3,(copperLogoColour+2)	; set the colour in the copper list
+
+            movem.l 	(sp)+,d0-d3			; restore the saved registers
+			rts								; return
+
 ******************************************************************
 gfxname:
               GRAFNAME                                   ; inserts the graphics library name
@@ -212,11 +294,34 @@ DMACONSave:   dc.w        1
 CopperSave:   dc.l        1
 INTENARSave:  dc.w        1
 
+LogoR: 		dc.b $f					; save the red value of the logo
+LogoG:		dc.b 0					; save the green value of the logo
+LogoB:		dc.b 0					; save the blue value of the logo
+LogoColour:	dc.w 0					; save the RGB value of the logo
+
+			EVEN
+
 ; This is the copper list.
 myCopperList:
     dc.w	$1fc,$0				; slow fetch for AGA compatibility
-    dc.w	$100,$0200			; wait for screen start
+    dc.w	BPLCON0,$0200			; wait for screen start
+
+; setup the screen so we can have our 320x256 bitplane
+	dc.w	DIWSTRT,$2c81
+	dc.w	DIWSTOP,$2cc1
+	dc.w	DDFSTRT,$38
+	dc.w	DDFSTOP,$d0
+	dc.w	BPL1MOD,$0
+	dc.w	BPL2MOD,$0
+
+copBp1P:
+	dc.w	BPL1PTH,0			; high word of bitplane1
+	dc.w	BPL1PTL,0			; low word of bitplane1
+	dc.w	BPLCON0,$1200		; turn on bitplane1
+
     dc.w	COLOR00,$0			; set COLOUR00 to black
+copperLogoColour:
+    dc.w	COLOR01,$0			; set COLOUR01, we cycle this value 
 
 ; draw the first copper bar - red
 copperBar1:
