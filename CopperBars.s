@@ -50,8 +50,9 @@ init:
             move.w      #$138,d0                       ; wait for eoframe
             bsr.w       WaitRaster                     
             move.w      #$7fff,INTENA(a6)              ; disable interupts
+														; Set INTREQ twice due to A4000 bug.
             move.w      #$7fff,INTREQ(a6)              ; disable all bits in INTREQ
-;            move.w      #$7fff,INTREQ(a6)              ; disable all bits in INTREQ
+            move.w      #$7fff,INTREQ(a6)              ; disable all bits in INTREQ
 ;            move.w      #$7fff,DMACON(a6)              ; disable all bits in DMACON
 ;            move.w      #$87e0,DMACON(a6)              ; Activation classique pour démo
 
@@ -219,7 +220,7 @@ DrawBar:
 ;------------------------
 ; Colour cycle the logo
 ColourCycleLogo:
-            movem.l 	d0-d3,-(sp)			; save the registers we need to use 
+            movem.l 	d0-d3,-(sp)			; save the registers we need to use
 
 			move.b		(LogoR),d0			; load the current red value in d0
 			move.b		(LogoG),d1			; load the current green value in d1
